@@ -1,0 +1,18 @@
+# Local / heavy files not needed for Streamlit Cloud deploy
+study_data864.json
+Metaphor_data.json
+human_emotion_corr_cluster.ipynb
+app.py
+
+# Python / env
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.env.*
+.DS_Store
+Thumbs.db
+
+# Streamlit
+.streamlit/secrets.toml

@@ -1,0 +1,22 @@
+{
+  "user": "Yunfan",
+  "ratings": {
+    "Metaphor/1.png": {
+      "image_id": "Metaphor/1.png",
+      "filename": "1.png",
+      "is_metaphor": true,
+      "valence": 1,
+      "intensity": 4,
+      "emotions": {
+        "hopeful_content_happy_excited": 1,
+        "surprised_awestruck": 1,
+        "shocked_sad_concerned": 5,
+        "bored_overwhelmed": 1
+      },
+      "explanation": "look like blood",
+      "suitable_for_database": true,
+      "rated_at": "2026-09-17T10:55:10.636452+00:00"
+    }
+  },
+  "updated_at": "2026-09-17T10:55:10.637452+00:00"
+}
