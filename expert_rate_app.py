@@ -41,33 +41,26 @@ EMOTION_GROUPS = [
 
 YES_NO = ["Yes", "No"]
 
-VALENCE_OPTIONS = [
-    "1 · Very negative",
-    "2 · Negative",
-    "3 · Neutral",
-    "4 · Positive",
-    "5 · Very positive",
-]
-INTENSITY_OPTIONS = [
-    "1 · Very weak",
-    "2 · Weak",
-    "3 · Moderate",
-    "4 · Strong",
-    "5 · Very strong",
-]
-# Dominant emotion clusters use the same strength scale
-EMOTION_SCORE_OPTIONS = INTENSITY_OPTIONS
+VALENCE_LABELS = {
+    1: "1 · Very negative",
+    2: "2 · Negative",
+    3: "3 · Neutral",
+    4: "4 · Positive",
+    5: "5 · Very positive",
+}
+INTENSITY_LABELS = {
+    1: "1 · Very weak",
+    2: "2 · Weak",
+    3: "3 · Moderate",
+    4: "4 · Strong",
+    5: "5 · Very strong",
+}
+SCORE_OPTIONS = [1, 2, 3, 4, 5]
 
 
-def score_from_option(label: str | None) -> int | None:
-    if label is None:
-        return None
-    return int(str(label).strip()[0])
-
-
-def reset_key_if_invalid(key: str, options: list[str]) -> None:
-    """Drop leftover values from older slider/radio formats."""
-    if key in st.session_state and st.session_state[key] not in options:
+def reset_score_key(key: str) -> None:
+    """Drop leftover values from older radio (string) formats."""
+    if key in st.session_state and st.session_state[key] not in SCORE_OPTIONS:
         del st.session_state[key]
 
 # Soft teal / slate theme (avoid bright red)
@@ -212,6 +205,36 @@ div[data-testid="stAlert"]:has([data-testid="stIconInfo"]) {
   color: var(--muted);
   font-size: 0.88rem;
   margin-bottom: 0.8rem;
+}
+/* Keep the rated image large and sharp */
+.main-image img {
+  width: 100% !important;
+  max-height: 78vh !important;
+  height: auto !important;
+  object-fit: contain !important;
+}
+div[data-testid="stImage"] img {
+  max-height: 78vh;
+  object-fit: contain;
+}
+
+/* Wide: two columns (default Streamlit layout). Narrow: stack image then form. */
+@media (max-width: 960px) {
+  div[data-testid="stHorizontalBlock"]:has(.main-image) {
+    flex-direction: column !important;
+    flex-wrap: nowrap !important;
+    gap: 1rem !important;
+  }
+  div[data-testid="stHorizontalBlock"]:has(.main-image) > div[data-testid="column"],
+  div[data-testid="stHorizontalBlock"]:has(.main-image) > div[data-testid="stColumn"] {
+    width: 100% !important;
+    flex: 1 1 100% !important;
+    min-width: 100% !important;
+  }
+  .main-image img,
+  div[data-testid="stHorizontalBlock"]:has(.main-image) div[data-testid="stImage"] img {
+    max-height: 52vh !important;
+  }
 }
 </style>
 """
@@ -397,20 +420,21 @@ def render_rate_page(identity: str, all_images: list[dict]) -> None:
         unsafe_allow_html=True,
     )
 
-    left, right = st.columns([1.15, 1.0], gap="large")
+    # Image-first layout: 2 columns on wide screens; CSS stacks on narrow
+    left, right = st.columns([2.4, 1.0], gap="large")
 
     with left:
-        with st.container(border=True):
-            st.image(img["path"], use_container_width=True)
+        st.markdown('<div class="main-image">', unsafe_allow_html=True)
+        st.image(img["path"], use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     with right:
+        st.markdown('<div class="rate-form-panel">', unsafe_allow_html=True)
         image_id = img["image_id"]
-        reset_key_if_invalid(f"valence_{image_id}", VALENCE_OPTIONS)
-        reset_key_if_invalid(f"intensity_{image_id}", INTENSITY_OPTIONS)
+        reset_score_key(f"valence_{image_id}")
+        reset_score_key(f"intensity_{image_id}")
         for group in EMOTION_GROUPS:
-            reset_key_if_invalid(
-                f"emo_{group['key']}_{image_id}", EMOTION_SCORE_OPTIONS
-            )
+            reset_score_key(f"emo_{group['key']}_{image_id}")
 
         # Keep filled values when required fields are missing (no clear_on_submit)
         with st.form(f"rate_form_{image_id}", clear_on_submit=False):
@@ -425,53 +449,53 @@ def render_rate_page(identity: str, all_images: list[dict]) -> None:
             )
 
             st.markdown('<div class="section-label">2. Valence</div>', unsafe_allow_html=True)
-            valence_label = st.radio(
+            st.caption("Very negative → Very positive")
+            valence = st.select_slider(
                 "Valence",
-                options=VALENCE_OPTIONS,
-                horizontal=True,
-                index=None,
+                options=SCORE_OPTIONS,
+                value=3,
+                format_func=lambda x: VALENCE_LABELS[x],
                 key=f"valence_{image_id}",
                 label_visibility="collapsed",
             )
-            valence = score_from_option(valence_label)
 
             st.markdown('<div class="section-label">3. Emotional intensity</div>', unsafe_allow_html=True)
-            intensity_label = st.radio(
+            st.caption("Very weak → Very strong")
+            intensity = st.select_slider(
                 "Emotional intensity",
-                options=INTENSITY_OPTIONS,
-                horizontal=True,
-                index=None,
+                options=SCORE_OPTIONS,
+                value=3,
+                format_func=lambda x: INTENSITY_LABELS[x],
                 key=f"intensity_{image_id}",
                 label_visibility="collapsed",
             )
-            intensity = score_from_option(intensity_label)
 
             st.markdown(
                 '<div class="section-label">4. Dominant emotion</div>',
                 unsafe_allow_html=True,
             )
             st.caption("1 Very weak → 5 Very strong")
-            emotion_scores: dict[str, int | None] = {}
+            emotion_scores: dict[str, int] = {}
             for group in EMOTION_GROUPS:
-                st.markdown(f"**{group['label']}**")
-                emo_label = st.radio(
+                emotion_scores[group["key"]] = st.select_slider(
                     group["label"],
-                    options=EMOTION_SCORE_OPTIONS,
-                    horizontal=True,
-                    index=None,
+                    options=SCORE_OPTIONS,
+                    value=1,
+                    format_func=lambda x: INTENSITY_LABELS[x],
                     key=f"emo_{group['key']}_{image_id}",
-                    label_visibility="collapsed",
                 )
-                emotion_scores[group["key"]] = score_from_option(emo_label)
 
-            st.markdown('<div class="section-label">5. Explanation</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="section-label">5. Explanation (optional)</div>',
+                unsafe_allow_html=True,
+            )
             explanation = st.text_area(
                 "Explanation",
                 placeholder=(
-                    "One sentence: which visual element most influenced "
+                    "Optional: which visual element most influenced "
                     "your judgment, and why"
                 ),
-                height=100,
+                height=80,
                 key=f"expl_{image_id}",
                 label_visibility="collapsed",
             )
@@ -497,14 +521,6 @@ def render_rate_page(identity: str, all_images: list[dict]) -> None:
             missing = []
             if is_metaphor is None:
                 missing.append("metaphor judgment")
-            if valence is None:
-                missing.append("valence")
-            if intensity is None:
-                missing.append("intensity")
-            if any(v is None for v in emotion_scores.values()):
-                missing.append("dominant emotion scores")
-            if not (explanation or "").strip():
-                missing.append("explanation")
             if suitable_for_db is None:
                 missing.append("database suitability")
             if missing:
@@ -517,7 +533,7 @@ def render_rate_page(identity: str, all_images: list[dict]) -> None:
                     "valence": int(valence),
                     "intensity": int(intensity),
                     "emotions": {k: int(v) for k, v in emotion_scores.items()},
-                    "explanation": explanation.strip(),
+                    "explanation": (explanation or "").strip(),
                     "suitable_for_database": suitable_for_db == "Yes",
                     "rated_at": datetime.now(timezone.utc).isoformat(),
                 }
@@ -538,6 +554,7 @@ def render_rate_page(identity: str, all_images: list[dict]) -> None:
             ):
                 st.session_state.rate_index = min(len(todo) - 1, idx + 1)
                 st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
