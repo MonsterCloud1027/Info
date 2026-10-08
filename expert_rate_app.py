@@ -657,24 +657,21 @@ def _metaphor_label(value) -> str:
     return "—"
 
 
-@st.cache_data(show_spinner=False)
+def _load_json_dict(path: Path) -> dict:
+    """Read a JSON object from disk. Do not cache: an earlier miss must not stick."""
+    if not path.exists() or not path.is_file():
+        return {}
+    with open(path, encoding="utf-8-sig") as f:
+        data = json.load(f)
+    return data if isinstance(data, dict) else {}
+
+
 def load_study_data(path: str) -> dict:
-    p = Path(path)
-    if not p.exists():
-        return {}
-    with open(p, encoding="utf-8") as f:
-        data = json.load(f)
-    return data if isinstance(data, dict) else {}
+    return _load_json_dict(Path(path))
 
 
-@st.cache_data(show_spinner=False)
 def load_metaphor_data(path: str) -> dict:
-    p = Path(path)
-    if not p.exists():
-        return {}
-    with open(p, encoding="utf-8") as f:
-        data = json.load(f)
-    return data if isinstance(data, dict) else {}
+    return _load_json_dict(Path(path))
 
 
 def _is_normal_image(img: dict) -> bool:
@@ -833,12 +830,18 @@ def render_welcome_page(all_images: list[dict]) -> None:
         unsafe_allow_html=True,
     )
 
-    if not STUDY_DATA_PATH.exists():
-        st.error(f"Study data not found: {STUDY_DATA_PATH.name}")
-    if not METAPHOR_DATA_PATH.exists():
-        st.error(f"Metaphor data not found: {METAPHOR_DATA_PATH.name}")
-    study = load_study_data(str(STUDY_DATA_PATH))
-    metaphor = load_metaphor_data(str(METAPHOR_DATA_PATH))
+    study_path = STUDY_DATA_PATH
+    metaphor_path = METAPHOR_DATA_PATH
+    if not study_path.exists():
+        st.error(f"Study data not found: {study_path}")
+    if not metaphor_path.exists():
+        st.error(f"Metaphor data not found: {metaphor_path}")
+    study = load_study_data(str(study_path))
+    metaphor = load_metaphor_data(str(metaphor_path))
+    if study_path.exists() and not study:
+        st.error(f"Could not read records from {study_path.name}.")
+    if metaphor_path.exists() and not metaphor:
+        st.error(f"Could not read records from {metaphor_path.name}.")
     stats = _collect_distributions(all_images, study, metaphor)
 
     c1, c2, c3 = st.columns(3)
