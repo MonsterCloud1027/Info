@@ -833,6 +833,10 @@ def render_welcome_page(all_images: list[dict]) -> None:
         unsafe_allow_html=True,
     )
 
+    if not STUDY_DATA_PATH.exists():
+        st.error(f"Study data not found: {STUDY_DATA_PATH.name}")
+    if not METAPHOR_DATA_PATH.exists():
+        st.error(f"Metaphor data not found: {METAPHOR_DATA_PATH.name}")
     study = load_study_data(str(STUDY_DATA_PATH))
     metaphor = load_metaphor_data(str(METAPHOR_DATA_PATH))
     stats = _collect_distributions(all_images, study, metaphor)

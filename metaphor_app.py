@@ -12,9 +12,31 @@ from PIL import Image
 
 # ---------------------------------------------------------------------------
 # Paths
+# Repo-relative first so Streamlit Cloud can read the JSON. Local Windows
+# folders are fallbacks for this machine.
 # ---------------------------------------------------------------------------
-DATA_PATH = Path(r"d:\CouldService\Info Data\Metaphor_data.json")
-IMAGE_DIR = Path(r"D:\CouldService\MetaphorDB\images")
+BASE_DIR = Path(__file__).resolve().parent
+
+
+def _first_existing(candidates: list[Path]) -> Path:
+    for path in candidates:
+        if path.exists():
+            return path
+    return candidates[0]
+
+
+DATA_PATH = _first_existing(
+    [
+        BASE_DIR / "Metaphor_data.json",
+        Path(r"d:\CouldService\Info Data\Metaphor_data.json"),
+    ]
+)
+IMAGE_DIR = _first_existing(
+    [
+        BASE_DIR / "images",
+        Path(r"D:\CouldService\MetaphorDB\images"),
+    ]
+)
 
 PAGE_SIZE_OPTIONS = [12, 24, 36, 48]
 THUMB_SIZE = 280
@@ -302,8 +324,10 @@ def main():
         st.error(f"Data file not found: {DATA_PATH}")
         return
     if not IMAGE_DIR.exists():
-        st.error(f"Image directory not found: {IMAGE_DIR}")
-        return
+        st.warning(
+            f"Image directory not found: {IMAGE_DIR}. "
+            "Annotations from the JSON file are still shown."
+        )
 
     df, raw = load_metaphor_data(str(DATA_PATH))
     image_dir = str(IMAGE_DIR)
