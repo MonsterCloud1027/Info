@@ -1,6 +1,5 @@
 # Local / heavy files not needed for Streamlit Cloud deploy
-study_data864.json
-Metaphor_data.json
+
 human_emotion_corr_cluster.ipynb
 app.py
 
