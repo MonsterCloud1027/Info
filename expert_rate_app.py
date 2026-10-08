@@ -219,34 +219,70 @@ div[data-testid="stAlert"]:has([data-testid="stIconInfo"]) {
   font-size: 0.88rem;
   margin-bottom: 0.8rem;
 }
-/* Keep the rated image large and sharp */
+/* Keep the rated image large and sharp, and pin it while the form scrolls. */
 .main-image img {
   width: 100% !important;
   max-height: 78vh !important;
   height: auto !important;
   object-fit: contain !important;
 }
-div[data-testid="stImage"] img {
-  max-height: 78vh;
-  object-fit: contain;
+div[data-testid="stHorizontalBlock"]:has(.main-image) {
+  align-items: flex-start !important;
+}
+div[data-testid="stColumn"]:has(.main-image),
+div[data-testid="column"]:has(.main-image) {
+  position: sticky;
+  top: 0.75rem;
+  align-self: flex-start !important;
+  z-index: 2;
+}
+div[data-testid="stColumn"]:has(.rate-form-panel),
+div[data-testid="column"]:has(.rate-form-panel) {
+  max-height: calc(100vh - 8.5rem);
+  overflow-y: auto;
+  align-self: flex-start !important;
+  padding-right: 0.4rem;
+  scrollbar-width: thin;
+  scrollbar-color: #b7d2c9 transparent;
 }
 
-/* Wide: two columns. Below 1400px: stack image then form. */
+/* Below 1400px: image on top at its own size, form scrolls underneath. */
 @media (max-width: 1400px) {
   div[data-testid="stHorizontalBlock"]:has(.main-image) {
     flex-direction: column !important;
     flex-wrap: nowrap !important;
-    gap: 1rem !important;
+    gap: 0.75rem !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
   }
   div[data-testid="stHorizontalBlock"]:has(.main-image) > div[data-testid="column"],
   div[data-testid="stHorizontalBlock"]:has(.main-image) > div[data-testid="stColumn"] {
     width: 100% !important;
-    flex: 1 1 100% !important;
     min-width: 100% !important;
+    flex: 0 0 auto !important;
+  }
+  div[data-testid="stColumn"]:has(.main-image),
+  div[data-testid="column"]:has(.main-image) {
+    position: sticky;
+    top: 0.5rem;
+    z-index: 5;
+    align-self: flex-start !important;
+    max-height: none !important;
+    overflow: visible !important;
+    background: #f4f7f6;
   }
   .main-image img,
   div[data-testid="stHorizontalBlock"]:has(.main-image) div[data-testid="stImage"] img {
-    max-height: 52vh !important;
+    width: 100% !important;
+    height: auto !important;
+    max-height: 78vh !important;
+    object-fit: contain !important;
+  }
+  div[data-testid="stColumn"]:has(.rate-form-panel),
+  div[data-testid="column"]:has(.rate-form-panel) {
+    max-height: none !important;
+    overflow: visible !important;
   }
 }
 </style>
