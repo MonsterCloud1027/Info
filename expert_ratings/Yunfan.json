@@ -16,7 +16,22 @@
       "explanation": "look like blood",
       "suitable_for_database": true,
       "rated_at": "2026-09-17T10:55:10.636452+00:00"
+    },
+    "Metaphor/1285.png": {
+      "image_id": "Metaphor/1285.png",
+      "filename": "1285.png",
+      "is_metaphor": "Yes",
+      "valence": 1,
+      "intensity": 4,
+      "top_emotions": [
+        "sad",
+        "concerned"
+      ],
+      "explanation": "",
+      "suitable_for_rq1": "Yes",
+      "suitable_for_rq2": "Yes",
+      "rated_at": "2026-10-08T09:39:46.730777+00:00"
     }
   },
-  "updated_at": "2026-09-17T10:55:10.637452+00:00"
+  "updated_at": "2026-10-08T09:39:46.730777+00:00"
 }
