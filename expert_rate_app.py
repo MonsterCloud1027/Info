@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import json
 import random
 import re
@@ -21,6 +22,7 @@ IMAGE_DIR = BASE_DIR / "choose"
 RATINGS_DIR = BASE_DIR / "expert_ratings"
 STUDY_DATA_PATH = BASE_DIR / "study_data864.json"
 METAPHOR_DATA_PATH = BASE_DIR / "Metaphor_data.json"
+SAME_IMAGES_PATH = IMAGE_DIR / "same_images.csv"
 
 DEFAULT_USERS = ["Christophe", "Thomas", "Yunfan"]
 
@@ -49,6 +51,12 @@ EMOTION_OPTIONS = [
     for group in EMOTION_GROUPS
     for part in group["label"].split(",")
 ]
+POSITIVE_AFFECTS = frozenset(
+    {"hopeful", "content", "happy", "excited", "awestruck", "surprised"}
+)
+NEGATIVE_AFFECTS = frozenset(
+    {"shocked", "sad", "concerned", "bored", "overwhelmed", "annoyed"}
+)
 
 METAPHOR_OPTIONS = ["Yes", "No", "Unsure"]
 
@@ -710,15 +718,47 @@ def load_metaphor_data(path: str) -> dict:
     return _load_json_dict(Path(path))
 
 
+def load_same_image_map(path: Path | None = None) -> dict[str, str]:
+    """Map a corpus filename (pic101.png) to its MetaphorDB filename (1854.png)."""
+    src = path or SAME_IMAGES_PATH
+    mapping: dict[str, str] = {}
+    if not src.exists() or not src.is_file():
+        return mapping
+    with open(src, encoding="utf-8-sig", newline="") as f:
+        for row in csv.DictReader(f):
+            corpus = (row.get("corpus") or "").strip()
+            metaphor = (row.get("MetaphorDB") or "").strip()
+            if corpus and metaphor:
+                mapping[corpus.lower()] = metaphor
+    return mapping
+
+
+def _image_folder(img: dict) -> str:
+    return img["image_id"].split("/", 1)[0].lower()
+
+
+def _is_shared_image(img: dict) -> bool:
+    return _image_folder(img) == "shared"
+
+
 def _is_normal_image(img: dict) -> bool:
+    if _is_shared_image(img):
+        return False
     name = img["filename"].lower()
-    folder = img["image_id"].split("/", 1)[0].lower()
-    return name.startswith("pic") or folder == "normal"
+    folder = _image_folder(img)
+    return folder == "normal" or name.startswith("pic")
 
 
 def _is_metaphor_image(img: dict) -> bool:
-    folder = img["image_id"].split("/", 1)[0].lower()
-    return folder == "metaphor"
+    return _image_folder(img) in {"metaphor", "shared"}
+
+
+def _metaphor_filename_for(img: dict, same_map: dict[str, str]) -> str | None:
+    if _is_shared_image(img):
+        return same_map.get(img["filename"].lower())
+    if _is_metaphor_image(img):
+        return img["filename"]
+    return None
 
 
 def _study_record(study: dict, filename: str) -> dict | None:
@@ -760,42 +800,91 @@ def _top3_affects(rec: dict) -> list[tuple[str, float]]:
     return pairs[:3]
 
 
+def _write_study_attributes(rec: dict | None) -> None:
+    if not rec:
+        st.caption("No matching record in study_data864.json.")
+        return
+    affect = rec.get("primary_affect", "—")
+    mean = rec.get("primary_affect_mean", "—")
+    st.write(f"**Primary affect:** {affect} ({mean})")
+    top3 = _top3_affects(rec)
+    if top3:
+        lines = ", ".join(f"{name} ({value:g})" for name, value in top3)
+        st.write(f"**Top 3 affect:** {lines}")
+    else:
+        st.write("**Top 3 affect:** —")
+
+
+def _write_metaphor_attributes(rec: dict | None) -> None:
+    if not rec:
+        st.caption("No matching record in Metaphor_data.json.")
+        return
+    strategies = [
+        ann.get("strategy")
+        for ann in (rec.get("annotations") or [])
+        if isinstance(ann, dict) and ann.get("strategy")
+    ]
+    shown = ", ".join(strategies) if strategies else "—"
+    st.write(f"**Strategy:** {shown}")
+
+
 def _render_image_attributes(img: dict, study: dict, metaphor: dict) -> None:
     st.markdown("##### Image attributes")
-    if _is_normal_image(img):
-        rec = _study_record(study, img["filename"])
-        if not rec:
-            st.caption("No matching record in study_data864.json.")
+    if _is_shared_image(img):
+        same_map = load_same_image_map()
+        mapped = _metaphor_filename_for(img, same_map)
+        st.markdown("**Corpus**")
+        _write_study_attributes(_study_record(study, img["filename"]))
+        st.markdown("**MetaphorDB**")
+        if not mapped:
+            st.caption("No pic id mapping in same_images.csv.")
             return
-        affect = rec.get("primary_affect", "—")
-        mean = rec.get("primary_affect_mean", "—")
-        st.write(f"**Primary affect:** {affect} ({mean})")
-        top3 = _top3_affects(rec)
-        if top3:
-            lines = ", ".join(f"{name} ({value:g})" for name, value in top3)
-            st.write(f"**Top 3 affect:** {lines}")
-        else:
-            st.write("**Top 3 affect:** —")
+        st.caption(f"Mapped id: {mapped}")
+        _write_metaphor_attributes(_metaphor_record(metaphor, mapped))
+        return
+
+    if _is_normal_image(img):
+        _write_study_attributes(_study_record(study, img["filename"]))
         return
 
     if _is_metaphor_image(img):
-        rec = _metaphor_record(metaphor, img["filename"])
-        if not rec:
-            st.caption("No matching record in Metaphor_data.json.")
-            return
-        strategies = [
-            ann.get("strategy")
-            for ann in (rec.get("annotations") or [])
-            if isinstance(ann, dict) and ann.get("strategy")
-        ]
-        shown = ", ".join(strategies) if strategies else "—"
-        st.write(f"**Strategy:** {shown}")
+        _write_metaphor_attributes(_metaphor_record(metaphor, img["filename"]))
         return
 
     st.caption("No attribute source for this image.")
 
 
-def _distribution_chart(counts: Counter, value_title: str) -> None:
+def _affect_polarity(name: str) -> str | None:
+    key = name.strip().lower()
+    if key in POSITIVE_AFFECTS:
+        return "Positive"
+    if key in NEGATIVE_AFFECTS:
+        return "Negative"
+    return None
+
+
+def _add_emotion_counts(
+    rec: dict,
+    primary: Counter,
+    top3: Counter,
+    primary_polarity: Counter,
+    top3_polarity: Counter,
+) -> None:
+    affect = str(rec["primary_affect"])
+    primary[affect] += 1
+    polarity = _affect_polarity(affect)
+    if polarity:
+        primary_polarity[polarity] += 1
+    for name, _value in _top3_affects(rec):
+        top3[name] += 1
+        polarity = _affect_polarity(name)
+        if polarity:
+            top3_polarity[polarity] += 1
+
+
+def _distribution_chart(
+    counts: Counter, value_title: str, sort: str | list[str] = "-x"
+) -> None:
     if not counts:
         st.caption("No matching records.")
         return
@@ -805,7 +894,7 @@ def _distribution_chart(counts: Counter, value_title: str) -> None:
         .mark_bar(color="#3d7a6e", cornerRadiusEnd=4)
         .encode(
             x=alt.X("count:Q", title=value_title, axis=alt.Axis(tickMinStep=1)),
-            y=alt.Y("category:N", sort="-x", title=None),
+            y=alt.Y("category:N", sort=sort, title=None),
             tooltip=[
                 alt.Tooltip("category:N", title="Category"),
                 alt.Tooltip("count:Q", title=value_title),
@@ -821,23 +910,27 @@ def _collect_distributions(
 ) -> dict:
     primary: Counter = Counter()
     top3: Counter = Counter()
+    primary_polarity: Counter = Counter()
+    top3_polarity: Counter = Counter()
     strategy: Counter = Counter()
     normal_n = metaphor_n = 0
-    normal_missing = metaphor_missing = 0
+    metaphor_missing = shared_emotion_missing = 0
+    same_map = load_same_image_map()
 
     for img in all_images:
-        if _is_normal_image(img):
-            normal_n += 1
+        if _is_normal_image(img) or _is_shared_image(img):
             rec = _study_record(study, img["filename"])
             if not rec or not rec.get("primary_affect"):
-                normal_missing += 1
-                continue
-            primary[str(rec["primary_affect"])] += 1
-            for name, _value in _top3_affects(rec):
-                top3[name] += 1
+                if _is_shared_image(img):
+                    shared_emotion_missing += 1
+            else:
+                _add_emotion_counts(rec, primary, top3, primary_polarity, top3_polarity)
+        if _is_normal_image(img):
+            normal_n += 1
         elif _is_metaphor_image(img):
             metaphor_n += 1
-            rec = _metaphor_record(metaphor, img["filename"])
+            metaphor_name = _metaphor_filename_for(img, same_map)
+            rec = _metaphor_record(metaphor, metaphor_name) if metaphor_name else None
             strategies = [
                 str(ann["strategy"])
                 for ann in (rec.get("annotations") or [])
@@ -845,16 +938,18 @@ def _collect_distributions(
             ] if rec else []
             if not strategies:
                 metaphor_missing += 1
-                continue
-            strategy.update(strategies)
+            else:
+                strategy.update(strategies)
 
     return {
         "normal_n": normal_n,
         "metaphor_n": metaphor_n,
-        "normal_missing": normal_missing,
         "metaphor_missing": metaphor_missing,
+        "shared_emotion_missing": shared_emotion_missing,
         "primary": primary,
         "top3": top3,
+        "primary_polarity": primary_polarity,
+        "top3_polarity": top3_polarity,
         "strategy": strategy,
     }
 
@@ -884,6 +979,11 @@ def render_welcome_page(all_images: list[dict]) -> None:
     c1.metric("Images", len(all_images))
     c2.metric("Normal", stats["normal_n"])
     c3.metric("Metaphor", stats["metaphor_n"])
+    st.caption(
+        "Images in shared are counted as Metaphor. "
+        "Emotion charts also include their corpus records. "
+        "MetaphorDB ids come from choose/same_images.csv."
+    )
 
     go_rate, go_results = st.columns(2)
     with go_rate:
@@ -902,20 +1002,37 @@ def render_welcome_page(all_images: list[dict]) -> None:
             args=("Results",),
         )
 
-    st.subheader("Normal images")
+    st.subheader("Emotion")
     st.caption(
+        "Normal and shared images. "
         "Primary affect is one label per image. "
         "Top 3 affect counts each image’s three strongest emotion means."
     )
-    if stats["normal_missing"]:
-        st.caption(f"{stats['normal_missing']} normal image(s) have no study record.")
+    st.caption(
+        "Positive: hopeful, content, happy, excited, awestruck, surprised. "
+        "Negative: shocked, sad, concerned, bored, overwhelmed, annoyed."
+    )
+    if stats["shared_emotion_missing"]:
+        st.caption(
+            f"{stats['shared_emotion_missing']} shared image(s) have no corpus emotion record."
+        )
+    polarity_order = ["Positive", "Negative"]
     left, right = st.columns(2, gap="large")
     with left:
         st.markdown("**Primary affect**")
         _distribution_chart(stats["primary"], "Images")
     with right:
+        st.markdown("**Primary affect · positive vs negative**")
+        _distribution_chart(stats["primary_polarity"], "Images", sort=polarity_order)
+    left, right = st.columns(2, gap="large")
+    with left:
         st.markdown("**Top 3 affect**")
         _distribution_chart(stats["top3"], "Appearances")
+    with right:
+        st.markdown("**Top 3 affect · positive vs negative**")
+        _distribution_chart(
+            stats["top3_polarity"], "Appearances", sort=polarity_order
+        )
 
     st.subheader("Metaphor images")
     st.caption("Strategy counts each annotation on an image.")
@@ -983,8 +1100,8 @@ def render_results_page(all_images: list[dict]) -> None:
     kind_pick = kind_pick or []
     st.caption(
         "Completed means every rater has submitted. "
-        "Metaphor images are in the Metaphor folder; "
-        "filenames starting with pic count as non-metaphor."
+        "Metaphor includes the Metaphor folder and shared. "
+        "Other filenames starting with pic count as non-metaphor."
     )
 
     def _is_complete(img: dict) -> bool:
@@ -994,7 +1111,9 @@ def render_results_page(all_images: list[dict]) -> None:
         return all(image_id in all_by_user.get(user, {}) for user in users)
 
     def _is_metaphor_item(img: dict) -> bool:
-        return _is_metaphor_image(img) and not img["filename"].lower().startswith("pic")
+        if _is_shared_image(img):
+            return True
+        return _image_folder(img) == "metaphor" and not img["filename"].lower().startswith("pic")
 
     shown = []
     for img in all_images:

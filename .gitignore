@@ -2,6 +2,8 @@
 
 human_emotion_corr_cluster.ipynb
 app.py
+qwen3vl_attention/
+coding/
 
 # Python / env
 __pycache__/
